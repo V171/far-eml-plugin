@@ -1,0 +1,12 @@
+LIBRARY eml_plugin
+EXPORTS
+    SetStartupInfoW
+    GetGlobalInfoW
+    GetPluginInfoW
+    OpenW
+    ClosePanelW
+    GetFindDataW
+    FreeFindDataW
+    GetOpenPanelInfoW
+    GetFilesW
+    SetDirectoryW
