@@ -37,5 +37,9 @@ cl /LD /MT /EHsc /I "C:\Program Files\Far Manager\PluginSDK\Headers.c" eml_plugi
 
 **—борка дл€ x86:**
 ```cmd
-cl /LD /MT /EHsc /I "C:\Program Files\Far Manager (x86)\PluginSDK\Headers.c" eml_plugin.cpp /link /NOENTRY /DEF:eml_plugin.def /OUT:eml_plugin.dll kernel32.lib user32.lib libcmt.lib libcpmt.lib vcruntime.lib ucrt.lib legacy_stdio_definitions.lib
+cl /LD /MT /EHsc /I "C:\Program Files (x86)\Far Manager\PluginSDK\Headers.c" eml_plugin.cpp /link /NOENTRY /DEF:eml_plugin.def /OUT:eml_plugin.x86.dll kernel32.lib user32.lib libcmt.lib libcpmt.lib vcruntime.lib ucrt.lib legacy_stdio_definitions.lib
 ```
+
+## Ћицензи€
+Ётот проект распростран€етс€ под лицензией Apache 2.0 Ч подробности см. в файле [LICENSE](LICENSE).
+Copyright (c) 2026 V171.

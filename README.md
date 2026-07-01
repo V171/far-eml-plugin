@@ -39,5 +39,10 @@ cl /LD /MT /EHsc /I "C:\Program Files\Far Manager\PluginSDK\Headers.c" eml_plugi
 
 **Build for x86:**
 ```cmd
-cl /LD /MT /EHsc /I "C:\Program Files\Far Manager (x86)\PluginSDK\Headers.c" eml_plugin.cpp /link /NOENTRY /DEF:eml_plugin.def /OUT:eml_plugin.dll kernel32.lib user32.lib libcmt.lib libcpmt.lib vcruntime.lib ucrt.lib legacy_stdio_definitions.lib
+cl /LD /MT /EHsc /I "C:\Program Files (x86)\Far Manager\PluginSDK\Headers.c" eml_plugin.cpp /link /NOENTRY /DEF:eml_plugin.def /OUT:eml_plugin.x86.dll kernel32.lib user32.lib libcmt.lib libcpmt.lib vcruntime.lib ucrt.lib legacy_stdio_definitions.lib
 ```
+
+## License
+Licensed under the Apache 2.0 License. See LICENSE file for details.
+Copyright (c) 2026 V171.
+

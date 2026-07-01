@@ -1,4 +1,9 @@
-﻿#define _CRT_SECURE_NO_WARNINGS
+﻿// ============================================================================
+// Far Manager EML Plugin
+// Copyright (c) 2026 V171
+// Licensed under the Apache 2.0 License. See LICENSE file for details.
+// ============================================================================
+#define _CRT_SECURE_NO_WARNINGS
 #include <windows.h>
 #include <plugin.hpp>
 #include <stdio.h>
@@ -138,6 +143,22 @@ size_t QPDecode(const char* src, size_t len, char** out) {
     return o;
 }
 
+size_t URLDecode(const char* src, size_t len, char* out) {
+    size_t o = 0;
+    for (size_t i = 0; i < len; i++) {
+        if (src[i] == '%' && i + 2 < len) {
+            char hex[3] = {src[i+1], src[i+2], 0};
+            if (isxdigit(hex[0]) && isxdigit(hex[1])) {
+                out[o++] = (char)strtol(hex, NULL, 16);
+                i += 2;
+                continue;
+            }
+        }
+        out[o++] = src[i];
+    }
+    return o;
+}
+
 UINT GetCodePage(const char* charset) {
     if (!charset) return CP_ACP;
     if (_stricmp(charset, "utf-8") == 0 || _stricmp(charset, "utf8") == 0) return CP_UTF8;
@@ -205,6 +226,81 @@ void DecodeMimeFilename(const char* src, wchar_t* out, size_t out_size) {
         out[out_pos++] = (wchar_t)(unsigned char)*p++;
     }
     out[out_pos] = 0;
+}
+
+bool ExtractRFC2231(const char* headerVal, const char* baseParam, wchar_t* out, size_t out_size) {
+    if (!headerVal || !out || out_size == 0) return false;
+
+    char combined[2048] = {0};
+    size_t combined_len = 0;
+    char charset[32] = {0};
+    char paramToFind[64];
+
+    // Попытка найти multipart RFC 2231: baseParam*0*=
+    sprintf(paramToFind, "%s*0*=", baseParam);
+    const char* p = stristr(headerVal, paramToFind);
+    if (p) {
+        p += strlen(paramToFind);
+        const char* quote1 = strchr(p, '\'');
+        if (quote1) {
+            size_t csLen = quote1 - p;
+            if (csLen > 0 && csLen < sizeof(charset)) {
+                strncpy(charset, p, csLen);
+                charset[csLen] = 0;
+            }
+            const char* quote2 = strchr(quote1 + 1, '\'');
+            if (quote2) {
+                p = quote2 + 1;
+                const char* end = p;
+                while (*end && *end != ';' && *end != '\r' && *end != '\n') end++;
+                if (end > p) combined_len += URLDecode(p, end - p, combined + combined_len);
+
+                for (int i = 1; i < 10; i++) {
+                    sprintf(paramToFind, "%s*%d*=", baseParam, i);
+                    const char* next_p = stristr(headerVal, paramToFind);
+                    if (!next_p) break;
+                    next_p += strlen(paramToFind);
+                    const char* end2 = next_p;
+                    while (*end2 && *end2 != ';' && *end2 != '\r' && *end2 != '\n') end2++;
+                    if (end2 > next_p) combined_len += URLDecode(next_p, end2 - next_p, combined + combined_len);
+                }
+
+                UINT cp = GetCodePage(charset);
+                MultiByteToWideChar(cp, 0, combined, (int)combined_len, out, (int)out_size);
+                return true;
+            }
+        }
+    }
+
+    // Попытка найти single part RFC 5987: baseParam*=
+    sprintf(paramToFind, "%s*=", baseParam);
+    p = stristr(headerVal, paramToFind);
+    if (p) {
+        p += strlen(paramToFind);
+        const char* quote1 = strchr(p, '\'');
+        if (quote1) {
+            size_t csLen = quote1 - p;
+            if (csLen > 0 && csLen < sizeof(charset)) {
+                strncpy(charset, p, csLen);
+                charset[csLen] = 0;
+            }
+            const char* quote2 = strchr(quote1 + 1, '\'');
+            if (quote2) {
+                p = quote2 + 1;
+                const char* end = p;
+                while (*end && *end != ';' && *end != '\r' && *end != '\n') end++;
+
+                char decoded[2048];
+                size_t dec_len = URLDecode(p, end - p, decoded);
+
+                UINT cp = GetCodePage(charset);
+                MultiByteToWideChar(cp, 0, decoded, (int)dec_len, out, (int)out_size);
+                return true;
+            }
+        }
+    }
+
+    return false;
 }
 
 void GetHeader(const char* headers, size_t headersLen, const char* name, char* out, size_t out_size) {
@@ -324,11 +420,11 @@ void ParseMimePart(const char* partStart, size_t partLen) {
     memcpy(headers, partStart, headerLen);
     headers[headerLen] = 0;
     
-    char ct[256] = {0};
+    char ct[1024] = {0}; // Увеличено с 256 до 1024
     GetHeader(headers, headerLen, "Content-Type:", ct, sizeof(ct));
-    char cd[256] = {0};
+    char cd[2048] = {0}; // Увеличено с 256 до 2048 для длинных имен файлов
     GetHeader(headers, headerLen, "Content-Disposition:", cd, sizeof(cd));
-    char cte[64] = {0};
+    char cte[128] = {0};
     GetHeader(headers, headerLen, "Content-Transfer-Encoding:", cte, sizeof(cte));
     
     const char* limit = partStart + partLen;
@@ -360,14 +456,28 @@ void ParseMimePart(const char* partStart, size_t partLen) {
             }
         }
     } else {
-        char filename[256] = {0};
-        ExtractParam(cd, "filename", filename, sizeof(filename));
-        if (!filename[0]) ExtractParam(ct, "name", filename, sizeof(filename));
-        
         wchar_t wname[256] = {0};
-        if (filename[0]) {
-            DecodeMimeFilename(filename, wname, 256);
-        } else {
+        bool hasFilename = false;
+        
+        if (cd[0]) {
+            if (ExtractRFC2231(cd, "filename", wname, 256)) hasFilename = true;
+        }
+        if (!hasFilename && ct[0]) {
+            if (ExtractRFC2231(ct, "name", wname, 256)) hasFilename = true;
+        }
+        
+        if (!hasFilename) {
+            char filename[512] = {0};
+            ExtractParam(cd, "filename", filename, sizeof(filename));
+            if (!filename[0]) ExtractParam(ct, "name", filename, sizeof(filename));
+            
+            if (filename[0]) {
+                DecodeMimeFilename(filename, wname, 256);
+                hasFilename = true;
+            }
+        }
+        
+        if (!hasFilename) {
             char genName[64];
             if (stristr(ct, "text/html")) strcpy(genName, "message.html");
             else if (stristr(ct, "text/plain")) strcpy(genName, "message.txt");
@@ -430,7 +540,7 @@ bool ParseEML(const wchar_t* filename) {
     
     AddFile(L"headers.txt", content, headerLen);
     
-    char ct[256] = {0};
+    char ct[1024] = {0}; // Увеличено
     GetHeader(content, headerLen, "Content-Type:", ct, sizeof(ct));
     
     if (stristr(ct, "multipart/")) {
@@ -459,7 +569,7 @@ bool ParseEML(const wchar_t* filename) {
             }
         }
     } else {
-        char cte[64] = {0};
+        char cte[128] = {0};
         GetHeader(content, headerLen, "Content-Transfer-Encoding:", cte, sizeof(cte));
         
         char* decodedBody = NULL;
