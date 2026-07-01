@@ -1,6 +1,6 @@
-# Far Manager EML Plugin
+п»ї# Far Manager EML Plugin
 
-[Русская версия](README_RU.md)
+[Р СѓСЃСЃРєР°СЏ РІРµСЂСЃРёСЏ](README_RU.md)
 
 A plugin for Far Manager that allows opening `.eml` (email) files as regular archives. 
 The email is displayed as a folder containing the plain text body (`message.txt`), HTML representation (`message.html`), and all attachments (images, documents, etc.) with correctly decoded names.
